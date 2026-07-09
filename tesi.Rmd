@@ -1,0 +1,703 @@
+---
+title: "Tesi"
+output: pdf_document
+date: "2025-02-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+```
+
+```{r include=FALSE}
+rm(list=ls())
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(car)
+library(pROC)
+library(mice)
+library(ResourceSelection)
+library(caret)
+
+data <- read_excel("DataBase_BLS+.xlsx",sheet = 2)
+colnames(data) <- c("Cognome", "Nome", "Data_nascita", "Sede", "Data_intervento", 
+                    "Estemporaneo", "Istotipo", "Dimensione_meta_sln",
+                    "Sln_positivi", "Sln_negativi", 
+                    "Non_sln_negativi", "Non_sln_positivi", 
+                     "G", "t","N", "MIB1", "ER", "PR", 
+                    "ERB","N0")
+
+
+data_oggi <- as.Date("13/03/2025", format="%d/%m/%Y")
+data$Data_intervento <- as.Date(data$Data_intervento, format = "%Y-%m-%d")
+data$eta_intervento<-floor(as.numeric(difftime(data$Data_intervento, data$Data_nascita, units = "days"))/365.25)
+
+
+# conversione in numeriche 
+data$Sln_positivi <- as.numeric(data$Sln_positivi)
+data$Sln_negativi <- as.numeric(data$Sln_negativi)
+data$Non_sln_negativi <- as.numeric(data$Non_sln_negativi)
+data$Non_sln_positivi <- as.numeric(data$Non_sln_positivi)
+data$Dimensione_meta_sln<-as.numeric(data$Dimensione_meta_sln)
+
+
+data$perc_non_sln<-data$Non_sln_positivi/(data$Non_sln_negativi+data$Non_sln_positivi)
+data$perc_sln<-data$Sln_positivi/(data$Sln_positivi+data$Sln_negativi)
+
+data$Sede<-as.factor(data$Sede)
+data$Estemporaneo<-as.factor(data$Estemporaneo)
+data$Istotipo <- as.factor(data$Istotipo)
+data$ERB<-as.factor(data$ERB)
+data$G <- as.factor(data$G)
+data$t <- as.factor(data$t)
+data$N0<-as.factor(data$N0)
+
+data<-data[data$Istotipo!=2,]
+data<-data[data$Istotipo!=8,]
+
+data <- data[!is.na(data$perc_non_sln), ]
+
+attach(data)
+```
+
+# UNIVARIATE
+
+```{r echo=FALSE}
+#età al primo intervento
+#1 valore mancante
+
+summary(eta_intervento)
+sd(eta_intervento,na.rm = TRUE)
+IQR(eta_intervento,na.rm = TRUE)
+ggplot(data=data, aes(x=factor(0),y=eta_intervento,fill=factor(0)))+
+  geom_boxplot(width=0.2)+
+  scale_fill_manual(values="cadetblue3",
+                    labels="boh")+
+  labs(x="", y="Età all'intervento")+
+  theme_minimal()+
+  theme(legend.position = "none")
+
+################################################################################
+#Dimensione meta sln 
+#31 valori mancanti
+
+summary(Dimensione_meta_sln)
+sd(Dimensione_meta_sln,na.rm =TRUE)
+IQR(Dimensione_meta_sln,na.rm = TRUE)
+ggplot(data=data, aes(x=factor(0),y=Dimensione_meta_sln,fill=factor(0)))+
+  geom_boxplot(width=0.2)+
+  scale_fill_manual(values="cadetblue3",
+                    labels="boh")+
+  labs(x="", y="Dimensione meta sln")+
+  theme_minimal()+
+  theme(legend.position = "none")
+
+################################################################################
+#perc sln 
+summary(perc_sln)
+sd(perc_sln)
+IQR(perc_sln)
+ggplot(data=data, aes(x=factor(0),y=perc_sln,fill=factor(0)))+
+  geom_boxplot(width=0.2)+
+  scale_fill_manual(values="cadetblue3",
+                    labels="boh")+
+  labs(x="", y="percentuale sln positivi")+
+  theme_minimal()+
+  theme(legend.position = "none")
+
+################################################################################
+#perc non sln 
+summary(perc_non_sln)
+sd(perc_non_sln)
+IQR(perc_non_sln)
+ggplot(data=data, aes(x=factor(0),y=perc_non_sln,fill=factor(0)))+
+  geom_boxplot(width=0.2)+
+  scale_fill_manual(values="cadetblue3",
+                    labels="boh")+
+  labs(x="", y="percentuale non sln positivi")+
+  theme_minimal()+
+  theme(legend.position = "none")
+
+################################################################################
+#ER
+summary(ER)
+sd(ER,na.rm = TRUE)
+IQR(ER,na.rm = TRUE)
+ggplot(data=data, aes(x=factor(0),y=ER,fill=factor(0)))+
+  geom_boxplot(width=0.2)+
+  scale_fill_manual(values="cadetblue3",
+                    labels="boh")+
+  labs(x="", y="ER")+
+  theme_minimal()+
+  theme(legend.position = "none")
+
+################################################################################
+#PR
+summary(PR)
+sd(PR,na.rm = TRUE)
+IQR(PR,na.rm = TRUE)
+ggplot(data=data, aes(x=factor(0),y=PR,fill=factor(0)))+
+  geom_boxplot(width=0.2)+
+  scale_fill_manual(values="cadetblue3",
+                    labels="boh")+
+  labs(x="", y="PR")+
+  theme_minimal()+
+  theme(legend.position = "none")
+
+################################################################################
+#MIB1
+#1 valore mancante
+
+summary(MIB1)
+sd(MIB1,na.rm = TRUE)
+IQR(MIB1,na.rm = TRUE)
+ggplot(data=data, aes(x=factor(0),y=MIB1,fill=factor(0)))+
+  geom_boxplot(width=0.2)+
+  scale_fill_manual(values="cadetblue3",
+                    labels="boh")+
+  labs(x="", y="MIB1")+
+  theme_minimal()+
+  theme(legend.position = "none")
+
+################################################################################
+#sede
+#1 valore mancante
+
+table(Sede)
+
+freq_assolute <- table(Sede)
+freq_relative <- prop.table(freq_assolute) * 100
+df_freq <- data.frame(
+  Sede = names(freq_relative),
+  Frequenza_Relativa = as.numeric(freq_relative)
+)
+df_freq$Sede <- factor(df_freq$Sede, levels = c(as.character(1:6)))
+
+ggplot(df_freq, aes(x = Sede, y = Frequenza_Relativa, fill = Sede)) +
+  geom_bar(stat = "identity", show.legend = TRUE) +  
+  geom_text(aes(label = round(Frequenza_Relativa, 1)), vjust = -0.5, size = 3) +
+  scale_fill_manual(name = "Sede", values = c("1" = "red3", "2" = "yellow3", "3" = "palegreen3","4"="cyan3","5"="darkorchid3","6"="sienna3")) +
+  labs(x = "Sede", y = "Frequenza relativa (%)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+################################################################################
+#estemporaneo
+
+table(Estemporaneo)
+
+freq_estemporaneo <- table(data$Estemporaneo)
+freq_relative <- prop.table(freq_estemporaneo) * 100  
+df_freq <- as.data.frame(freq_relative)
+df_freq$Estemporaneo <- df_freq$Var1
+#barplot
+ggplot(df_freq, aes(x = Var1, y = Freq, fill = Estemporaneo)) +  
+  geom_bar(stat = "identity", show.legend = TRUE) +
+  scale_fill_manual(name = "Estemporaneo", values = c("0" = "cyan3", "1" = "darkorchid3")) +
+  geom_text(aes(label = round(Freq, 1)), vjust = -0.5, size = 3) +  
+  labs(x = "Estemporaneo", y = "Frequenza Relativa (%)") +
+  theme_minimal()
+
+################################################################################
+#Istotipo
+
+
+table(Istotipo)
+
+freq_estemporaneo2 <- table(data$Istotipo)
+freq_estemporaneo2 <- freq_estemporaneo2[freq_estemporaneo2 > 0]
+freq_relative2 <- prop.table(freq_estemporaneo2) * 100  
+df_freq2 <- as.data.frame(freq_relative2)
+df_freq2$Istotipo <- df_freq2$Var1
+#barplot
+ggplot(df_freq2, aes(x = Var1, y = Freq, fill = as.factor(Istotipo))) +  
+  geom_bar(stat = "identity", show.legend = TRUE) +
+  scale_fill_manual(name = "Istotipo", values = c("1" = "cyan3", "3" = "sienna3", "7" = "darkorchid3", "9" = "red3")) +
+  geom_text(aes(label = round(Freq, 1)), vjust = -0.5, size = 3) +  
+  labs(x = "Istotipo", y = "Frequenza Relativa (%)") +
+  theme_minimal()
+
+################################################################################
+#G
+#8 valori mancanti
+
+table(G)
+
+freq_estemporaneo3 <- table(data$G)
+freq_relative3 <- prop.table(freq_estemporaneo3) * 100  
+df_freq3 <- as.data.frame(freq_relative3)
+df_freq3$G <- df_freq3$Var1
+
+#barplot
+ggplot(df_freq3, aes(x = Var1, y = Freq, fill = as.factor(G))) +  
+  geom_bar(stat = "identity", show.legend = TRUE) +
+  scale_fill_manual(name = "G", values = c("1" = "cyan3", "2" = "sienna3", "3" = "darkorchid3")) +
+  geom_text(aes(label = round(Freq, 1)), vjust = -0.5, size = 3) +  
+  labs(x = "G", y = "Frequenza Relativa (%)") +
+  theme_minimal()
+
+################################################################################
+#T
+#5 valori mancanti
+
+table(t)
+
+freq_estemporaneo4 <- table(t)
+freq_relative4 <- prop.table(freq_estemporaneo4) * 100 
+df_freq4 <- as.data.frame(freq_relative4)
+df_freq4$Var1 <- rownames(df_freq4)
+df_freq4$Var1 <- factor(df_freq4$t, levels = c("T1a", "T1b", "T1c", "T2", "T3"))
+
+#barplot
+ggplot(df_freq4, aes(x = Var1, y = Freq, fill = Var1)) +  
+  geom_bar(stat = "identity", show.legend = TRUE) +
+  scale_fill_manual(name = "t", values = c("T1a" = "cyan3", "T1b" = "palegreen3", "T1c" = "sienna3", "T2" = "slateblue3", "T3" = "darkorchid3")) +
+  geom_text(aes(label = round(Freq, 1)), vjust = -0.5, size = 3) +  
+  labs(x = "T", y = "Frequenza Relativa (%)") +
+  theme_minimal()
+
+################################################################################
+#N0
+
+table(N0)
+
+freq_estemporaneo5 <- table(data$N0)
+freq_relative5 <- prop.table(freq_estemporaneo5) * 100  
+df_freq5 <- as.data.frame(freq_relative5)
+df_freq5$N0 <- factor(df_freq5$Var1, levels = c("0", "1"))
+
+#barplot
+ggplot(df_freq5, aes(x = N0, y = Freq, fill = N0)) +  
+  geom_bar(stat = "identity", show.legend = TRUE) +
+  scale_fill_manual(name = "N0", values = c("0" = "cyan3", "1" = "darkorchid3")) +
+  geom_text(aes(label = round(Freq, 1)), vjust = -0.5, size = 3) +  
+  labs(x = "N0", y = "Frequenza Relativa (%)") +
+  theme_minimal()
+
+################################################################################
+#ERB
+
+#tabella
+table(ERB)
+
+freq_estemporaneo6 <- table(data$ERB)
+freq_relative6 <- prop.table(freq_estemporaneo6) * 100  
+df_freq6 <- as.data.frame(freq_relative6)
+df_freq6$ERB <- factor(df_freq6$Var1, levels = c("0", "1", "2", "3"))
+
+#barplot
+ggplot(df_freq6, aes(x = ERB, y = Freq, fill = ERB)) +  
+  geom_bar(stat = "identity", show.legend = TRUE) +
+  scale_fill_manual(name = "ERB", 
+                    values = c("0" = "cyan3", "1" = "palegreen3", 
+                               "2" = "sienna3", "3" = "darkorchid3")) +
+  geom_text(aes(label = round(Freq, 1)), vjust = -0.5, size = 3) +  
+  labs(x = "ERB", y = "Frequenza Relativa (%)") +
+  theme_minimal()
+
+```
+
+
+# BIVARIATE SIGNIFICATIVE
+
+## quantitative-fattorali
+
+```{r}
+################################################################################
+#Dimensione meta sln
+data_filtered <- data %>% filter(!is.na(G))
+
+# Crea il boxplot con i dati filtrati
+ggplot(data_filtered, aes(x = G, y = Dimensione_meta_sln, fill = G)) + 
+  geom_boxplot(width = 0.7) +
+  labs(x = "G", y = "Dimensione meta sln", fill = "G") +
+  theme(
+    legend.text = element_text(size = 12),  
+    legend.title = element_text(size = 14)  
+  ) +
+  theme_minimal()
+kruskal.test(Dimensione_meta_sln ~ G)
+pairwise.wilcox.test(Dimensione_meta_sln,G)
+
+################################################################################
+#perc non sln 
+ggplot(data,aes(x=N0,y=perc_non_sln,fill=N0))+ 
+  geom_boxplot(width=0.4)+
+  labs(x="N0", y="Perc non sln",fill="N0")+
+  theme(
+    legend.text = element_text(size = 12),  
+    legend.title = element_text(size = 14)  
+  )+
+  theme_minimal()
+wilcox.test(perc_non_sln ~ N0)
+
+data_filtered1 <- data %>% filter(!is.na(t))
+ggplot(data_filtered1,aes(x=t,y=perc_non_sln,fill=t))+ 
+  geom_boxplot(width=0.7)+
+  labs(x="T", y="Perc non sln",fill="T")+
+  theme(
+    legend.text = element_text(size = 12),  
+    legend.title = element_text(size = 14)  
+  )+
+  theme_minimal()
+kruskal.test(perc_non_sln ~ t)
+pairwise.wilcox.test(perc_non_sln,t)
+
+################################################################################
+#MIB1
+data_filtered2 <- data %>% filter(!is.na(Sede))
+
+ggplot(data_filtered2,aes(x=Sede,y=MIB1,fill=Sede))+ 
+  geom_boxplot(width=0.7)+
+  labs(x="Sede", y="MIB1",fill="Sede")+
+  theme(
+    legend.text = element_text(size = 12),  
+    legend.title = element_text(size = 14)  
+  )+
+  theme_minimal()
+kruskal.test(MIB1 ~ Sede)
+pairwise.wilcox.test(MIB1,Sede)
+
+
+ggplot(data,aes(x=Istotipo,y=MIB1,fill=Istotipo))+ 
+  geom_boxplot(width=0.7)+
+  labs(x="Istotipo", y="MIB1",fill="Istotipo")+
+  theme(
+    legend.text = element_text(size = 12),  
+    legend.title = element_text(size = 14)  
+  )+
+  theme_minimal()
+kruskal.test(MIB1 ~ Istotipo)
+pairwise.wilcox.test(MIB1,Istotipo)
+
+
+ggplot(data_filtered,aes(x=G,y=MIB1,fill=G))+ 
+  geom_boxplot(width=0.4)+
+  labs(x="G", y="MIB1",fill="G")+
+  theme(
+    legend.text = element_text(size = 12),  
+    legend.title = element_text(size = 14)  
+  )+
+  theme_minimal()
+kruskal.test(MIB1 ~G)
+pairwise.wilcox.test(MIB1,G)
+
+
+ggplot(data,aes(x=ERB,y=MIB1,fill=ERB))+ 
+  geom_boxplot(width=0.7)+
+  labs(x="ERB", y="MIB1",fill="ERB")+
+  theme(
+    legend.text = element_text(size = 12),  
+    legend.title = element_text(size = 14)  
+  )+
+  theme_minimal()
+kruskal.test(MIB1 ~ ERB)
+pairwise.wilcox.test(MIB1,ERB)
+################################################################################
+#ER
+
+ggplot(data_filtered,aes(x=G,y=ER,fill=G))+ 
+  geom_boxplot(width=0.4)+
+  labs(x="G", y="ER",fill="G")+
+  theme(
+    legend.text = element_text(size = 12),  
+    legend.title = element_text(size = 14)  
+  )+
+  theme_minimal()
+kruskal.test(ER ~ G)
+pairwise.wilcox.test(ER,G)
+
+ggplot(data,aes(x=ERB,y=ER,fill=ERB))+ 
+  geom_boxplot(width=0.7)+
+  labs(x="ERB", y="ER",fill="ERB")+
+  theme(
+    legend.text = element_text(size = 12),  
+    legend.title = element_text(size = 14)  
+  )+
+  theme_minimal()
+kruskal.test(ER ~ ERB)
+pairwise.wilcox.test(ER,ERB)
+
+################################################################################
+#PR
+ggplot(data_filtered, aes(x = G, y = PR, fill = G)) + 
+  geom_boxplot(width = 0.4) +
+  labs(x = "G", y = "PR", fill = "G") +
+  theme(
+    legend.text = element_text(size = 12),  
+    legend.title = element_text(size = 14)
+  )+
+  theme_minimal()
+
+kruskal.test(PR ~G)#evitabile
+pairwise.wilcox.test(PR,G)
+```
+
+## quantitative-quantitative
+```{r}
+cor.test(eta_intervento,ER,method = "spearman")
+ggplot(data, aes(x = eta_intervento, y = ER)) +
+  geom_point() +
+  geom_smooth(method = "loess", color = "red")+
+  labs(x = "Età all'intervento", y = "ER")+
+  theme_minimal()
+
+cor.test(Dimensione_meta_sln,perc_non_sln,method = "spearman")
+ggplot(data, aes(x = Dimensione_meta_sln, y = perc_non_sln)) +
+  geom_point() +
+  geom_smooth(method = "loess",color = "red")+
+
+  labs(x = "Dimensione meta sln", y = "Perc non sln")+
+  theme_minimal()
+
+cor.test(PR,MIB1,method = "spearman")
+ggplot(data, aes(x = PR, y = MIB1)) +
+  geom_smooth(method = "loess", color = "red")+
+  geom_point() +
+  labs(x = "PR", y = "MIB1")+
+  theme_minimal()
+
+cor.test(ER,MIB1,method = "spearman")
+ggplot(data, aes(x = ER, y = MIB1)) +
+  geom_smooth(method = "loess", color = "red")+
+  geom_point() +
+  labs(x = "ER", y = "MIB1")+
+  theme_minimal()
+
+
+cor.test(ER,PR,method = "spearman")
+ggplot(data, aes(x = ER, y = PR)) +
+  geom_smooth(method = "loess", color = "red")+
+  geom_point() +
+  labs(x = "ER", y = "PR")+
+  theme_minimal()
+```
+
+## qualitativa-qualitativa
+```{r}
+chisq.test(Sede,Estemporaneo,simulate.p.value = TRUE, B = 100000)
+table(Sede,Estemporaneo)
+prop.table(table(Sede,Estemporaneo)) * 100
+
+chisq.test(Estemporaneo,t,simulate.p.value = TRUE, B = 100000)
+table(Estemporaneo,t)
+prop.table(table(Estemporaneo,t)) * 100
+
+chisq.test(Estemporaneo,ERB,simulate.p.value = TRUE, B = 100000)
+table(Estemporaneo,ERB)
+prop.table(table(Estemporaneo,ERB)) * 100
+
+chisq.test(Istotipo,t, simulate.p.value = TRUE, B = 100000)
+table(Istotipo,t)
+prop.table(table(Istotipo,t)) * 100
+
+chisq.test(G,t, simulate.p.value = TRUE, B = 100000)
+table(G,t)
+prop.table(table(G,t)) * 100
+
+chisq.test(G,ERB, simulate.p.value = TRUE, B = 100000)
+table(G,ERB)
+prop.table(table(G,ERB)) * 100
+
+
+chisq.test(ERB,N0, simulate.p.value = TRUE, B = 100000)
+table(ERB,N0)
+prop.table(table(ERB,N0)) * 100
+
+```
+
+# modello
+```{r}
+#uso mediana
+data <- data %>%
+ mutate_if(is.numeric, ~ifelse(is.na(.), median(., na.rm = TRUE), .))
+
+#uso moda
+data <- data %>%
+  mutate(across(where(is.factor), ~replace(., is.na(.), names(which.max(table(.))))))
+attach(data)
+
+n<-data$Non_sln_negativi+data$Non_sln_positivi
+
+#elimino le variabili che non servono
+data<-data[,-c(1,2,3,5,9:12,15)]
+
+#selezione in avanti
+m.a<-glm(formula = perc_non_sln ~ ., family = binomial, data = data, weights = n)
+m.n<-glm(formula = perc_non_sln ~1, family = binomial, data = data, weights = n)
+add1(m.n,scope=m.a, test = "Chisq")
+
+ma.1<-update(m.n,.~.+Dimensione_meta_sln)
+add1(ma.1,scope=m.a, test = "Chisq")
+
+ma.2<-update(ma.1,.~.+N0)
+add1(ma.2,scope=m.a, test = "Chisq")
+
+ma.3<-update(ma.2,.~.+Istotipo)
+add1(ma.3,scope=m.a, test = "Chisq")
+
+ma.4<-update(ma.3,.~.+Sede)
+add1(ma.4,scope=m.a, test = "Chisq")
+
+ma.5<-update(ma.4,.~.+PR)
+add1(ma.5,scope=m.a, test = "Chisq")
+
+ma.6<-update(ma.5,.~.+perc_sln)
+add1(ma.6,scope=m.a, test = "Chisq")
+
+ma.7<-update(ma.6,.~.+G)
+add1(ma.7,scope=m.a, test = "Chisq")
+summary(ma.7)
+
+#p-value maggiori di 0.05 ma minori di 0.1
+ma.8<-update(ma.7,.~.+t)
+add1(ma.8,scope=m.a, test = "Chisq")
+
+ma.9<-update(ma.8,.~.+Estemporaneo)
+add1(ma.9,scope=m.a, test = "Chisq")
+
+ma.10<-update(ma.9,.~.+MIB1)
+add1(ma.10,scope=m.a, test = "Chisq")
+
+ma.11<-update(ma.10,.~.+eta_intervento)
+add1(ma.11,scope=m.a, test = "Chisq")
+
+ma.12<-update(ma.11,.~.+ERB)
+add1(ma.12,scope=m.a, test = "Chisq")
+summary(ma.12)
+
+#modello di quasi verosimiglianza
+mq.a<-glm(formula = perc_non_sln ~ ., family = quasi(link="logit",variance="mu(1-mu)"), data = data, weights = n)
+summary(mq.a)
+
+mq.1<-update(mq.a,.~.-ER)
+summary(mq.1)
+
+mq.2<-update(mq.1,.~.-t)
+summary(mq.2)
+
+mq.3<-update(mq.2,.~.-eta_intervento)
+summary(mq.3)
+
+mq.4<-update(mq.3,.~.-ERB)
+summary(mq.4)
+
+mq.5<-update(mq.4,.~.-MIB1)
+summary(mq.5)
+
+mq.6<-update(mq.5,.~.-Estemporaneo)
+summary(mq.6)
+
+mq.7<-update(mq.6,.~.-G)
+summary(mq.7)
+
+mq.8<-update(mq.7,.~.-perc_sln)
+summary(mq.8)
+
+#analisi all'indietro
+m<-glm(perc_non_sln~eta_intervento+Dimensione_meta_sln+perc_sln+ER+PR+Estemporaneo+Sede+Istotipo+G+t+ERB+MIB1+N0,
+       weights=n,data=data,family=binomial)
+drop1(m,test="Chisq")
+m1<-update(m,.~.-ER)
+drop1(m1,test="Chisq")
+m2<-update(m1,.~.-ERB)
+drop1(m2,test="Chisq")
+m3<-update(m2,.~.-eta_intervento)
+drop1(m3,test="Chisq")
+summary(m3)
+```
+
+## Bontà del modello
+
+```{r}
+#modello nullo
+m.nul<-glm(perc_non_sln~1,
+       weights=n,data=data,family=binomial)
+anova(m.nul,ma.7,test="LRT")
+
+#analisi dei residui
+qqnorm(residuals(ma.7))
+qqline(residuals(ma.7))
+shapiro.test(residuals(ma.7))
+
+
+res<-residuals(ma.7)
+res_df <- data.frame(Residuals = residuals(ma.7))
+ggplot(res_df, aes(sample = Residuals)) +
+  stat_qq() +  
+  stat_qq_line(color = "red", linetype = "dashed") + 
+  labs(
+    x = "Quantili teorici",
+    y = "Quantili empirici"
+  ) +
+  theme_minimal()
+plot_data <- data.frame(
+  Fitted = fitted(ma.7), 
+  Residuals = residuals(ma.7)  
+)
+ggplot(plot_data, aes(x = Fitted, y = Residuals)) +
+  geom_point(alpha = 0.6, color = "steelblue") +  
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    x = "Valori stimati",
+    y = "Residui",
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#curva roc
+y1<-NULL
+for (i in 1:length(Non_sln_positivi)){
+  y1<-c(y1,c(rep(1,Non_sln_positivi[i]),
+             rep(0,n[i]-Non_sln_positivi[i])))
+}
+
+pim3<-fitted(ma.7,type="response")
+pim33 <- rep(pim3, times = n) 
+plot(roc(y1,pim33),print.auc=T)
+
+roc_obj3 <- roc(y1, pim33)
+auc <- round(auc(y1, pim33),3)
+ggroc(roc_obj3, colour = 'steelblue', size = 2) +
+  ggtitle(paste0( 'AUC = ', auc))+
+  geom_segment(
+    aes(x = 1, xend = 0, y = 0, yend = 1), color = "red", linetype = "dashed"
+  )
+
+#migliore 
+pred_prob <- predict(mq.8, type = "response")
+pred_class <- ifelse(pred_prob > 0.124, 1, 0)
+pred_e<- ifelse(perc_non_sln > 0, 1, 0)
+
+roc_obj <- roc(pred_e, pred_prob)
+best_threshold <- coords(roc_obj, "best", best.method = "youden")
+confusionMatrix(as.factor(pred_class), as.factor(pred_e))
+
+#Controlla se il modello stima correttamente le probabilità predette con il test di Hosmer-Lemeshow:
+hoslem.test(perc_non_sln, fitted(ma.7), g = 10)
+```
+
+## altre funzioni legame
+
+```{r}
+m.p<-glm(perc_non_sln~Dimensione_meta_sln+perc_sln+PR+Estemporaneo+Sede+Istotipo+G+t+MIB1+N0,
+       weights=n,data=data,family=binomial(link="probit"))
+
+m.c<-glm(perc_non_sln~Dimensione_meta_sln+perc_sln+PR+Estemporaneo+Sede+Istotipo+G+t+MIB1+N0,
+       weights=n,data=data,family=binomial(link="cauchit"))
+
+m.l<-glm(perc_non_sln~Dimensione_meta_sln+perc_sln+PR+Estemporaneo+Sede+Istotipo+G+t+MIB1+N0,
+       weights=n,data=data,family=binomial(link="cloglog"))
+
+AIC(m3)
+AIC(m.p)
+AIC(m.c)
+AIC(m.l)
+
+summary(m.c)
+```
+
+
+
+
+
